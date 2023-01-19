@@ -28,8 +28,13 @@ Spring_2020_raw <- read_excel("Spring 2020 - Percent Cover - Raw Data DNET.xlsx"
 # multiple sheets mean we need to specify
 
 Spring_2020_raw <- read_excel("Spring 2020 - Percent Cover - Raw Data DNET.xlsx", sheet = "Sheet1")
-# whoa loads of error messages - looking at the data, a lot is not formatted right, especially the date. 
+# whoa loads of error messages - looking at the data, a lot is not formatted right, especially the date.
 
+glimpse(Spring_2020_raw)
+```
+
+
+```{r}
 Spring_2020_raw <- read_excel("Spring 2020 - Percent Cover - Raw Data DNET.xlsx", sheet = "Sheet1", skip = 1)
 # ah, that didn't help, because we'd rather have kept the first line as the column names. 
 # remove the skip. 
@@ -39,21 +44,31 @@ Spring_2020_raw <- read_excel("Spring 2020 - Percent Cover - Raw Data DNET.xlsx"
 ```
 There is more than one year's worth of data however. We need to import all three and check if they're in the same format. 
 ```{r}
-Spring_2020_headers <- 
-  read_excel("Spring 2021 - Percent Cover - Raw Data DNET.xlsx", sheet = "Sheet1", col_names = TRUE)
+Spring_2020_raw <- 
+  read_excel("Spring 2021 - Percent Cover - Raw Data DNET.xlsx", sheet = "Sheet1", col_names = FALSE)
 
-Spring_2021_headers <- 
-  read_excel("Spring 2021 - Percent Cover - Raw Data DNET.xlsx", sheet = "Sheet1", col_names = TRUE)
+Spring_2021_raw <- 
+  read_excel("Spring 2021 - Percent Cover - Raw Data DNET.xlsx", sheet = "Sheet1", col_names = FALSE)
 
-Spring_2022_headers <- 
-  read_excel("Spring 2022 - Percent Cover - Raw Data DNET.xlsx", sheet = "Sheet1", col_names = TRUE)
+Spring_2022_raw <- 
+  read_excel("Spring 2022 - Percent Cover - Raw Data DNET.xlsx", sheet = "Sheet1", col_names = FALSE)
 
-names(Spring_2020_headers)
-names(Spring_2021_headers)
-names(Spring_2022_headers)
+Spring_data_raw <- bind_rows(Spring_2020_raw, Spring_2021_raw, Spring_2022_raw)
+
+Spring_data_raw_better <- Spring_data_raw %>% 
+  row_to_names(row_number(1)) %>%  # Name our columns using the first row
+  rename(Transect = `Transect #`, Hits = `# Hits`) %>% # rename columns to be tidy
+  filter(Date != "Date" & Date != "mm/dd/yy") # get rid of non-data rows
 ```
 
 
+```{r}
+
+```
+
+
+
+```{r}
 Formatting one data frame - let's check out the checklist!
 
 Which row has the best column names to keep?
@@ -61,7 +76,9 @@ Use colnames(data) <- data[rownumber, ] to name your columns after that row.
 ```{r}
 
 # the function row_to_names() is from the janitor package
-Spring_2020_raw <- Spring_2020_raw %>% row_to_names(row_number(1))
+Spring_data_raw <- Spring_data_raw %>% row_to_names(row_number(1))
+
+row_to_names(Spring_2020_raw, row_number(1))
 
 Spring_2020_raw
 ```
@@ -69,7 +86,10 @@ Spring_2020_raw
 Are those column names okay, or do they need to be changed to be tidy, contain identifying information? 
 Use rename() to give your columns better names. 
 ```{r}
-Spring_2020_raw <- Spring_2020_raw %>% rename(Transect = `Transect #`, Hits = `# Hits`)
+Spring_data_raw_better <- Spring_data_raw %>% 
+  row_to_names(row_number(1)) %>% 
+  rename(Transect = `Transect #`, Hits = `# Hits`) %>% 
+  filter(Date != "Date" & Date != "mm/dd/yy")
 ```
 
 Which rows don’t contain observations? 
@@ -79,6 +99,9 @@ Spring_2020_raw %>% filter(Date != "Date" & Date != "mm/dd/yy")
 ```
 What should the columns be? 
 - Date should be a in a date format
+
+as.Date(Date, origin = "1899-12-30")
+
 - team should be character
 - block should be a factor and just say 1 instead of 1.0
 - Plot should be a factor and just say 1 instead of 1.0
@@ -92,13 +115,15 @@ What should the columns be?
 
  
 string it together in one tidy pipe.  
-```{r}
-Spring_2020_raw <- 
-  read_excel("Spring 2020 - Percent Cover - Raw Data DNET.xlsx", sheet = "Sheet1", col_names = FALSE)  %>% 
-  row_to_names(row_number(1)) %>% 
-  rename(Transect = `Transect #`, Hits = `# Hits`) %>% 
-  filter(Date != "mm/dd/yy")
 
+
+
+
+```{r}
+Spring_data_raw_better %>% filter(Code == "CONBON")
 ```
+
+
+
  
  

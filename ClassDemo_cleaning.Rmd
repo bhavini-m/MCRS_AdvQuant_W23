@@ -1,0 +1,168 @@
+---
+title: "ShortVersionDN"
+author: "Amy Henry"
+date: "2023-01-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(janitor)
+```
+
+```{r}
+Spring_2020_raw <- 
+  read_excel("Spring 2020 - Percent Cover - Raw Data DNET.xlsx", sheet = "Sheet1", col_names = FALSE)
+
+Spring_2021_raw <- 
+  read_excel("Spring 2021 - Percent Cover - Raw Data DNET.xlsx", sheet = "Sheet1", col_names = FALSE)
+
+Spring_2022_raw <- 
+  read_excel("Spring 2022 - Percent Cover - Raw Data DNET.xlsx", sheet = "Sheet1", col_names = FALSE)
+
+DNCodes <- read_csv(file = "DNCodes_new.csv")
+
+Full_Species_List_Glossary_reference_only_ <- read_excel("Full Species List Glossary (reference only).xlsx")
+```
+
+
+```{r}
+#Full_Species_List_Glossary_reference_only_ %>% View()
+
+
+SpeciesKey <- Full_Species_List_Glossary_reference_only_ %>% 
+  select(1:7) %>% 
+  rename(SpeciesCode = `Species Code (A-Z)`, 
+         NativeStatus = `Native/Non-Native`, 
+         CommonName = `Common Name`, 
+         SciName = `Full Scientific Name (Genus species)`)
+
+names(Full_Species_List_Glossary_reference_only_)
+
+```
+
+
+```{r}
+Spring_data_raw <- bind_rows(Spring_2020_raw, Spring_2021_raw, Spring_2022_raw)
+
+```
+
+
+```{r}
+Spring_data_raw_cols <- Spring_data_raw %>% 
+  row_to_names(row_number(1)) %>%  # Name our columns using the first row
+  rename(Transect = `Transect #`, Hits = `# Hits`) %>% # rename columns to be tidy
+  filter(Date != "Date" & Date != "mm/dd/yy") # get rid of non-data rows 
+  
+## DO NOT RUN - will overwrite hand entered data
+# Spring_data_raw_cols %>% select(Code) %>% distinct() %>% full_join(DNCodes) %>% write.csv(file = "DNCodes_new.csv")
+
+Spring_data_raw_cols %>% filter(is.na(Code) == TRUE)
+
+```
+
+
+```{r}
+Spring_data_raw_better <- Spring_data_raw_cols %>%
+  mutate(
+    Date = as.Date(as.numeric(as.character(Date)), origin = "1899-12-30"), 
+    Block = factor(as.numeric(Block)), 
+    Plot = factor(as.numeric(Plot)),
+    Transect = factor(as.numeric(Transect)),
+    Treatment = factor(Treatment),
+    Region = factor(Region),
+    Distance = as.numeric(Distance),
+    Hits = as.numeric(Hits)
+  ) %>% 
+  filter(is.na(Date) == FALSE) %>% 
+  full_join(DNCodes, by = "Code") %>%
+  left_join(SpeciesKey, by = "SpeciesCode") %>% 
+  
+
+  mutate(
+    
+    Lifeform = case_when(# this column came in from our SpeciesKey and is more complete
+      is.na(LifeForm) == FALSE ~ LifeForm, # when the version from DNCodes has a value, substitute in that value to the more complete column
+      TRUE ~ as.character(Lifeform)),
+    
+    CommonName = case_when(
+      SpeciesCode == "L" ~ "litter",
+      SpeciesCode == "B" ~ "bare ground",
+      SpeciesCode == "W" ~ "coarse woody debris",
+      SpeciesCode == "F" ~ "fine woody debris",
+      SpeciesCode == "R" ~ "rock", 
+      SpeciesCode == "S" ~ "stem",
+      SpeciesCode == "T" ~ "thatch",
+      TRUE ~ as.character(CommonName)
+      ),
+    
+    SciName = case_when(
+      Type == "Ground" ~ CommonName,
+      TRUE ~ as.character(SciName)
+    )
+    ) %>%
+  select(-Code) %>%
+  fill(Transect)%>%
+
+### Distance outlier of 53 - correct to 3.5?
+  mutate(Distance = case_when(
+    Distance == 53 ~ 2.5,
+    TRUE ~ as.numeric(Distance)
+  ))
+
+Spring_data_raw_better$SpeciesCode %>% unique()
+Spring_data_raw_better %>% 
+  #filter(Date == "2020-04-28") %>% 
+  filter(is.na(SpeciesCode) == TRUE) 
+
+
+```
+
+
+```{r}
+Spring_data_raw_better$Hits %>% unique()
+
+Spring_data_raw_better %>% filter(is.na(Hits) == TRUE) #%>% count(Date)
+
+Spring_data_raw_better %>% filter(Date == "2022-04-27", Block == 2, Plot == 8) %>% view()
+
+```
+
+
+```{r}
+### Hits with NAs - what does it mean
+Spring_data_all1 <- Spring_data_raw_better %>%  mutate(Hits = case_when(
+    (Type == "Plant" & is.na(Hits)) == TRUE ~ 1,
+    TRUE ~ as.numeric(Hits)
+  )) # %>%
+
+## Two possible directions here: Exclude data without hits recorded OR convert all hits to 1 and fill in the missing ones with 1's
+```
+
+
+```{r}
+### get rid of old empty Lifeform column and old Code column with errors
+  select(-c(Code, LifeForm))
+
+Spring_data_raw_better
+## Fixing species codes
+```
+
+```{r}
+Spring_data_raw_better$Notes %>% unique()
+
+Spring_data_raw_better %>% count(Region)
+
+
+Spring_data_raw_better %>% filter(is.na(Hits) == TRUE)
+Spring_data_raw_better %>% filter(is.na(SpeciesCode) == TRUE)
+
+
+Spring_data_raw_better %>% filter(Distance>5.0)
+```
+

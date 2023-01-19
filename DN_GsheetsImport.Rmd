@@ -1,0 +1,130 @@
+---
+title: "DNCleaning_3"
+author: "Amy Henry"
+date: "2023-01-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Importing data directly from Google Drive
+```{r}
+library(googlesheets4)
+library(tidyverse)
+library(janitor)
+library(lubridate)
+
+dat2020 <- read_sheet("https://docs.google.com/spreadsheets/d/1rB51iDFNQXhX7eUQKiRuel3akP72LlXNwU9K1o4UGCI/edit?usp=share_link", sheet = 2, col_types = "c")
+dat2021 <- read_sheet("https://docs.google.com/spreadsheets/d/13Ce9qHolaA3Aj_B5FuQolokLnwO7n0whgJ5V7OLKHGQ/edit?usp=share_link", sheet = 2, col_types = "c")
+dat2022 <- read_sheet("https://docs.google.com/spreadsheets/d/1kI2I7yumR4jhcf37n94kfwve01UXZCkyUW4-ExoFcLY/edit?usp=share_link", sheet = 2, col_types = "c")
+
+DNCodes <- read_csv(file = "DNCodes_new.csv")
+
+Full_Species_List_Glossary_reference_only_ <- read_excel("Full Species List Glossary (reference only).xlsx")
+```
+```{r}
+#Full_Species_List_Glossary_reference_only_ %>% View()
+
+
+SpeciesKey <- Full_Species_List_Glossary_reference_only_ %>% 
+  select(1:7) %>% 
+  rename(SpeciesCode = `Species Code (A-Z)`, 
+         NativeStatus = `Native/Non-Native`, 
+         CommonName = `Common Name`, 
+         SciName = `Full Scientific Name (Genus species)`)
+
+names(Full_Species_List_Glossary_reference_only_)
+
+```
+
+
+```{r}
+Spring_data_raw <- bind_rows(dat2020, dat2021, dat2022)
+
+```
+
+
+```{r}
+Spring_data_raw_cols <- Spring_data_raw %>% 
+  #row_to_names(row_number(1)) %>%  # Name our columns using the first row
+  rename(Transect = `Transect #`, Hits = `# Hits`) %>% # rename columns to be tidy
+  filter(Date != "Date" & Date != "mm/dd/yy") # get rid of non-data rows 
+  
+## DO NOT RUN - will overwrite hand entered data
+# Spring_data_raw_cols %>% select(Code) %>% distinct() %>% full_join(DNCodes) %>% write.csv(file = "DNCodes_new.csv")
+
+Spring_data_raw_cols
+
+```
+
+
+```{r}
+Spring_data_raw_better <- Spring_data_raw_cols %>%
+  mutate(
+    Date = mdy(Date), 
+    Block = factor(as.numeric(Block)), 
+    Plot = factor(as.numeric(Plot)),
+    Transect = factor(as.numeric(Transect)),
+    Treatment = factor(Treatment),
+    Region = factor(Region),
+    Distance = as.numeric(Distance),
+    Hits = as.numeric(Hits)
+  ) %>% 
+  #filter(is.na(Date) == FALSE) %>% 
+  full_join(DNCodes, by = "Code") %>%
+  left_join(SpeciesKey, by = "SpeciesCode") %>% 
+  
+
+  mutate(
+    
+    Lifeform = case_when(# this column came in from our SpeciesKey and is more complete
+      is.na(LifeForm) == FALSE ~ LifeForm, # when the version from DNCodes has a value, substitute in that value to the more complete column
+      TRUE ~ as.character(Lifeform)),
+    
+    CommonName = case_when(
+      SpeciesCode == "L" ~ "litter",
+      SpeciesCode == "B" ~ "bare ground",
+      SpeciesCode == "W" ~ "coarse woody debris",
+      SpeciesCode == "F" ~ "fine woody debris",
+      SpeciesCode == "R" ~ "rock", 
+      SpeciesCode == "S" ~ "stem",
+      SpeciesCode == "T" ~ "thatch",
+      TRUE ~ as.character(CommonName)
+      ),
+    
+    SciName = case_when(
+      Type == "Ground" ~ CommonName,
+      TRUE ~ as.character(SciName)
+    )
+    ) %>%
+  select(-Code) %>%
+  fill(Transect)%>%
+
+### Distance outlier of 53 - correct to 3.5?
+  mutate(Distance = case_when(
+    Distance == 53 ~ 2.5,
+    TRUE ~ as.numeric(Distance)
+  )) %>%
+  filter(is.na(SpeciesCode) == FALSE) %>%  
+  mutate(Hits = case_when(
+    (Type == "Plant" & is.na(Hits)) == TRUE ~ 1,
+    TRUE ~ as.numeric(Hits)
+  )) %>%
+  select(-LifeForm)
+
+Spring_data_raw_better
+```
+
+
+```{r}
+Spring_data_raw_better$Date %>% unique()
+
+Spring_data_raw_better %>% filter(is.na(Hits) == TRUE) #%>% count(Date)
+
+Spring_data_raw_better %>% filter(Date == "2022-04-27", Block == 2, Plot == 8) %>% view()
+
+```
+
+
